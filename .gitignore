@@ -4,7 +4,7 @@ node_modules/
 ml/.ipynb_checkpoints/
 
 # Ignore sensitive data files
-*.pkl
+
 *.json
 
 # Logs
