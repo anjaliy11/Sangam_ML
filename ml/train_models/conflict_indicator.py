@@ -92,6 +92,12 @@ grid_search = GridSearchCV(
 
 # Train the model
 grid_search.fit(X_train_scaled, y_train)
+# Encode categorical features
+site_location_encoder = LabelEncoder()
+data["site_location_encoded"] = site_location_encoder.fit_transform(data["site_location"])
+
+department_encoder = LabelEncoder()
+data["department_encoded"] = department_encoder.fit_transform(data["department"])
 
 # Best model after hyperparameter tuning
 best_model = grid_search.best_estimator_
@@ -138,12 +144,14 @@ plt.show()
 os.makedirs("ml/models", exist_ok=True)
 # Save the model
 joblib.dump(best_model, "ml/models/conflict_prediction_xgb.pkl")
+joblib.dump(scaler, "ml/models/scaler.pkl")
+joblib.dump(site_location_encoder, "ml/models/site_location_encoder.pkl")
+joblib.dump(department_encoder, "ml/models/department_encoder.pkl")
 print("Optimized XGBoost model saved as 'ml/models/conflict_prediction_xgb.pkl'")
 
 # Function to predict new input
 def predict_new_input(new_data):
     
-    # Load the saved model and encoders
     model = joblib.load("ml/models/conflict_prediction_xgb.pkl")
     scaler = joblib.load("ml/models/scaler.pkl")
     site_location_encoder = joblib.load("ml/models/site_location_encoder.pkl")
