@@ -8,17 +8,16 @@ from sklearn.preprocessing import StandardScaler
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
-# Initialize Flask app
+
 app = Flask(__name__)
 
-# Enable CORS if necessary
+
 CORS(app)
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
-# Configure logging
+
 logging.basicConfig(
     filename="flask_debug.log",
     level=logging.DEBUG,
@@ -27,7 +26,7 @@ logging.basicConfig(
 logger = logging.getLogger()
 
 
-host = os.getenv('HOST', '0.0.0.0')  # Use '0.0.0.0' for Render deployment
+host = os.getenv('HOST', '0.0.0.0')  
 port = int(os.getenv('PORT', 5000))
 # Load models and scalers for resource allocation
 try:
