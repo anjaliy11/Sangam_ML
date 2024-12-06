@@ -4,7 +4,7 @@ const apiRoutes = require('./routes/api');
 const connectDB = require('./models/db-models');
 // const apiRoutes = require('./routes/ml');
 
-
+require('dotenv').config();
 
 const app = express();
 
