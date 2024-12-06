@@ -26,6 +26,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 
+
+host = os.getenv('HOST', '0.0.0.0')  # Use '0.0.0.0' for Render deployment
+port = int(os.getenv('PORT', 5000))
 # Load models and scalers for resource allocation
 try:
     xgb_model_resource = joblib.load("ml/models/resource_allocation_model.pkl")
@@ -290,4 +293,4 @@ def predict_anomaly():
         return jsonify({"error": str(e)}), 500
 # Start the Flask app
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host=host, port=port, debug=True)
