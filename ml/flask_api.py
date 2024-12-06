@@ -7,24 +7,12 @@ import logging
 import traceback
 import os
 import numpy as np
-from dotenv import load_dotenv
-import os
-
-# Load environment variables from .env file
-load_dotenv()
-# Initialize Flask app
-app = Flask(__name__)
-# Access variables
-host = os.getenv("HOST", "127.0.0.1")  # Default to localhost
-port = os.getenv("PORT", 5000)         # Default to 5000
-
-# Use the variables
-app.run(host=host, port=int(port))
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
+# Initialize Flask app
+app = Flask(__name__)
 
 # Enable CORS if necessary
 CORS(app)
