@@ -1,34 +1,23 @@
 from flask import Flask, request, jsonify
 import joblib
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-from flask_cors import CORS
 import logging
-import traceback
 import os
 import numpy as np
+from sklearn.preprocessing import StandardScaler
+from flask_cors import CORS
 from dotenv import load_dotenv
-import os
 
 # Load environment variables from .env file
 load_dotenv()
+
 # Initialize Flask app
 app = Flask(__name__)
-# Access variables
-host = os.getenv("HOST", "127.0.0.1")  # Default to localhost
-port = os.getenv("PORT", 5000)         # Default to 5000
-
-# Use the variables
-app.run(host=host, port=int(port))
-
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-
-
 
 # Enable CORS if necessary
 CORS(app)
-
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 # Configure logging
 logging.basicConfig(
     filename="flask_debug.log",
@@ -37,22 +26,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger()
 
-print("Starting Flask app...")
-
-
-# <--------------resource_allocator------------>
-# Load the models and scalers
-from flask import Flask, request, jsonify
-import joblib
-import pandas as pd
-import logging
-
-# Initialize Flask app and logger
-app = Flask(__name__)
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
-
-# Load the models, scalers, and encoders
+# Load models and scalers for resource allocation
 try:
     xgb_model_resource = joblib.load("ml/models/resource_allocation_model.pkl")
     scaler_resource = joblib.load("ml/models/resource_allocation_scaler.pkl")
@@ -314,7 +288,6 @@ def predict_anomaly():
     except Exception as e:
         logger.error(f"Error occurred in anomaly detection: {str(e)}")
         return jsonify({"error": str(e)}), 500
-
-
+# Start the Flask app
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=True)
