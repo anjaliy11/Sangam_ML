@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import joblib
 import random
 
-# Generate Synthetic Data with Latitude and Longitude
 departments = ["Roads", "Electricity", "Sanitation", "Water Supply", "Gas Pipelines"]
 locations = {
     "Location-1": (28.7041, 77.1025),  # Example: Delhi
@@ -26,7 +25,7 @@ for _ in range(1000):
     lat, lon = locations[site_location]
     historical_conflicts = random.randint(0, 20)
     project_overlap = random.randint(1, 10)
-    distance = random.uniform(0.5, 5.0)  # Hypothetical distance between project sites
+    distance = random.uniform(0.5, 5.0)  
     communication_frequency = random.randint(1, 10)
     conflict_indicator = 1 if historical_conflicts > 10 and distance < 2 else 0
 
@@ -45,20 +44,17 @@ for _ in range(1000):
 
 df = pd.DataFrame(data)
 
-# Save synthetic data to a file
+
 df.to_json("data/conflict_departments.json", orient="records", indent=4)
 
-# Load Data
 data = pd.read_json("data/conflict_departments.json")
 
-# Encode categorical features
 label_encoder_dept1 = LabelEncoder()
 label_encoder_dept2 = LabelEncoder()
 
 data["department_1_encoded"] = label_encoder_dept1.fit_transform(data["department_1"])
 data["department_2_encoded"] = label_encoder_dept2.fit_transform(data["department_2"])
 
-# Define features and target
 features = [
     "department_1_encoded", "department_2_encoded", "latitude", "longitude",
     "historical_conflicts", "project_overlap", "distance", "communication_frequency"
@@ -66,15 +62,15 @@ features = [
 X = data[features]
 y = data["conflict_indicator"]
 
-# Split the data
+
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# Scale features
+
 scaler = StandardScaler()
 X_train_scaled = scaler.fit_transform(X_train)
 X_test_scaled = scaler.transform(X_test)
 
-# Define XGBoost model
+
 xgb_model = xgb.XGBClassifier(
     objective="binary:logistic",
     n_estimators=300,
@@ -86,10 +82,10 @@ xgb_model = xgb.XGBClassifier(
     eval_metric="logloss"
 )
 
-# Train the model
+
 xgb_model.fit(X_train_scaled, y_train)
 
-# Evaluate the model
+
 y_pred = xgb_model.predict(X_test_scaled)
 y_pred_prob = xgb_model.predict_proba(X_test_scaled)[:, 1]
 
@@ -98,7 +94,7 @@ print(f"ROC AUC: {roc_auc:.2f}")
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred, target_names=["No Conflict", "Conflict"]))
 
-# Plot Precision-Recall Curve
+
 precision, recall, thresholds = precision_recall_curve(y_test, y_pred_prob)
 pr_auc = auc(recall, precision)
 
@@ -110,7 +106,6 @@ plt.title("Precision-Recall Curve")
 plt.legend(loc="lower left")
 plt.show()
 
-# Plot ROC Curve
 fpr, tpr, _ = roc_curve(y_test, y_pred_prob)
 
 plt.figure(figsize=(8, 6))
@@ -128,18 +123,18 @@ joblib.dump(label_encoder_dept1, "ml/models/department_1_encoder.pkl")
 joblib.dump(label_encoder_dept2, "ml/models/department_2_encoder.pkl")
 print("Model and encoders saved.")
 
-# Load saved model
+
 xgb_model = joblib.load("ml/models/conflict_department_model.pkl")
 scaler = joblib.load("ml/models/conflict_scaler_with_coordinates.pkl")
 label_encoder_dept1 = joblib.load("ml/models/department_1_encoder.pkl")
 label_encoder_dept2 = joblib.load("ml/models/department_2_encoder.pkl")
 
-# Predict conflicts for new input
+
 new_input = pd.DataFrame([{
     "department_1_encoded": label_encoder_dept1.transform(["Roads"])[0],
     "department_2_encoded": label_encoder_dept2.transform(["Electricity"])[0],
-    "latitude": 28.7041,  # Example latitude
-    "longitude": 77.1025,  # Example longitude
+    "latitude": 28.7041,  
+    "longitude": 77.1025,  
     "historical_conflicts": 12,
     "project_overlap": 7,
     "distance": 1.5,

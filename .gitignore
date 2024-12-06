@@ -5,7 +5,7 @@ ml/.ipynb_checkpoints/
 
 # Ignore sensitive data files
 
-
+*.js
 
 # Logs
 logs
