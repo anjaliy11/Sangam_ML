@@ -340,6 +340,115 @@ def predict_anomaly():
     except Exception as e:
         logger.error(f"Error occurred in anomaly detection: {str(e)}")
         return jsonify({"error": str(e)}), 500
+    
+   
+    # <----------cost_reduction---------->
+    
+clf_model = joblib.load("ml/models/under_budget_classifier.pkl")
+reg_model = joblib.load("ml/models/cost_reduction_regressor.pkl")
+scaler = joblib.load("ml/models/cost_scaler.pkl")
+site_location_encoder = joblib.load("ml/models/site_location_encoder.pkl")
+department_encoder = joblib.load("ml/models/department_encoder.pkl")
+
+# Feature list
+features = [
+    "task_priority", "task_complexity", "resources_allocated", "communication_frequency",
+    "resource_efficiency", "complexity_efficiency_ratio", "interaction_effect", "historical_impact",
+    "adjusted_frequency", "completion_deviation", "cost_reduction_potential",
+    "resource_overallocation", "time_overrun_ratio", "communication_inefficiency",
+    "department_location_encoded"
+]
+
+# Function to handle missing data
+def handle_missing_data(input_data, training_data):
+    # Fill missing data with default values or based on the training data distribution
+    feature_stats = {
+        "task_priority": training_data["task_priority"].mean(),
+        "task_complexity": training_data["task_complexity"].mean(),
+        "resources_allocated": training_data["resources_allocated"].mean(),
+        "communication_frequency": training_data["communication_frequency"].mean(),
+        "resource_utilization": training_data["resource_utilization"].mean(),
+        "complexity_to_priority_ratio": training_data["complexity_to_priority_ratio"].mean(),
+        "adjusted_frequency": training_data["adjusted_frequency"].mean(),
+        "delay_factor": training_data["delay_factor"].mean(),
+        "site_location": training_data["site_location"].mode()[0],
+        "department": training_data["department"].mode()[0],
+    }
+    
+    for feature, default_value in feature_stats.items():
+        if feature not in input_data or input_data[feature] is None:
+            if isinstance(default_value, float):  # For numeric features
+                input_data[feature] = np.random.normal(
+                    loc=training_data[feature].mean(),
+                    scale=training_data[feature].std()
+                )
+            else:  # For categorical features
+                input_data[feature] = default_value
+    return input_data
+
+# Prediction function
+def predict_project_outcomes(new_data):
+    # Create DataFrame for new data
+    new_df = pd.DataFrame([new_data])
+
+    # Derived features
+    new_df["resource_efficiency"] = new_df["resources_allocated"] / (new_df["available_resources"] + 1e-6)
+    new_df["complexity_efficiency_ratio"] = new_df["task_complexity"] / (new_df["task_priority"] + 1)
+    new_df["interaction_effect"] = new_df["resources_allocated"] * new_df["communication_frequency"]
+    new_df["historical_impact"] = new_df["historical_delay"] * new_df["task_priority"]
+    new_df["adjusted_frequency"] = np.sqrt(new_df["communication_frequency"])
+    new_df["completion_deviation"] = new_df["actual_completion_time"] - new_df["expected_completion_time"]
+    new_df["cost_reduction_potential"] = (new_df["cost_estimate"] - new_df["actual_cost"]) / new_df["cost_estimate"]
+    new_df["resource_overallocation"] = new_df["resources_allocated"] / (new_df["task_complexity"] + 1e-6)
+    new_df["time_overrun_ratio"] = new_df["actual_completion_time"] / (new_df["expected_completion_time"] + 1e-6)
+    new_df["communication_inefficiency"] = (
+        new_df["communication_frequency"] / (new_df["task_priority"] + 1e-6)
+    )
+    new_df["department_location_interaction"] = (
+        new_df["department"].astype(str) + "_" + new_df["site_location"].astype(str)
+    )
+    new_df["department_location_encoded"] = pd.factorize(new_df["department_location_interaction"])[0]
+
+    # Ensure the DataFrame has required features
+    X_new = new_df[features]
+
+    # Scale features
+    X_new_scaled = scaler.transform(X_new)
+
+    # Make predictions
+    under_budget_prediction = clf_model.predict(X_new_scaled)
+    cost_optimization_prediction = reg_model.predict(X_new_scaled)
+
+    # Convert cost optimization potential to percentage and ensure it's a Python float
+    cost_optimization_percentage = float(cost_optimization_prediction[0]) * 100
+
+    # Return results
+    return {
+        "is_under_budget": bool(under_budget_prediction[0]),
+        "cost_optimization_potential_percentage": cost_optimization_percentage
+    }
+
+@app.route('/predict_cost_reduction', methods=['POST'])
+def predict_cost():
+    try:
+        # Parse input data from the request
+        input_data = request.get_json()
+
+        # Load training data for handling missing values (if necessary)
+        training_data = pd.read_json("data/enhanced_data.json")
+
+        # Handle missing data (optional step based on your model requirements)
+        input_data = handle_missing_data(input_data, training_data)
+
+        # Predict project outcomes
+        predictions = predict_project_outcomes(input_data)
+
+        return jsonify(predictions)
+
+    except Exception as e:
+        return jsonify({"error": str(e), "details": str(e)}), 500
+
+
 # Start the Flask app
 if __name__ == "__main__":
     app.run(host=host, port=port, debug=True)
