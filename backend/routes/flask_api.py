@@ -3,10 +3,8 @@ import joblib
 import pandas as pd
 import logging
 import os
-import traceback
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.preprocessing import LabelEncoder
 from flask_cors import CORS
 from dotenv import load_dotenv
 
@@ -96,122 +94,74 @@ def predict_resource_allocation():
     
 # <----------------conflict-------------->
 # Load models and encoders
-model = joblib.load("ml/models/conflict_prediction_xgb.pkl")
-scaler = joblib.load("ml/models/scaler.pkl")
-site_location_encoder = joblib.load("ml/models/site_location_encoder.pkl")
-department_encoder = joblib.load("ml/models/department_encoder.pkl")
 
-# Load training data for handling missing values
-training_data = pd.read_json("data/enhanced_data.json")
+try:
+    conflict_model = joblib.load("ml/models/conflict_prediction_xgb.pkl")
+    scaler_conflict = joblib.load("ml/models/scaler.pkl")
+    site_location_encoder = joblib.load("ml/models/site_location_encoder.pkl")
+    department_encoder = joblib.load("ml/models/department_encoder.pkl")
+except Exception as e:
+    logger.error(f"Error loading models or encoders: {str(e)}")
+    raise
 
-# Define feature columns as per the model's requirement
+# Define features
 features = [
     "task_priority", "task_complexity", "resources_allocated", "communication_frequency",
     "resource_utilization", "complexity_to_priority_ratio", "adjusted_frequency", "delay_factor",
     "site_location_encoded", "department_encoded"
 ]
 
-# Define function for handling missing features
-def handle_missing_data(input_data):
-    # Load statistics for feature filling
-    feature_stats = {
-        "task_priority": training_data["task_priority"].mean(),
-        "task_complexity": training_data["task_complexity"].mean(),
-        "resources_allocated": training_data["resources_allocated"].mean(),
-        "communication_frequency": training_data["communication_frequency"].mean(),
-        "resource_utilization": training_data["resource_utilization"].mean(),
-        "complexity_to_priority_ratio": training_data["complexity_to_priority_ratio"].mean(),
-        "adjusted_frequency": training_data["adjusted_frequency"].mean(),
-        "delay_factor": training_data["delay_factor"].mean(),
-        "site_location": training_data["site_location"].mode()[0],
-        "department": training_data["department"].mode()[0],
-    }
-
-    # Fill missing features with defaults or random values
-    for feature, default_value in feature_stats.items():
-        if feature not in input_data or input_data[feature] is None:
-            if isinstance(default_value, float):  # For numeric features
-                input_data[feature] = np.random.normal(
-                    loc=training_data[feature].mean(),
-                    scale=training_data[feature].std()
-                )
-            else:  # For categorical features
-                input_data[feature] = default_value
-
-    return input_data
 
 @app.route('/predict_conflict', methods=['POST'])
 def predict_conflict_():
     try:
-        # Parse input data from the request
         input_data = request.get_json()
+        logger.debug(f"Received input: {input_data}")
 
-        # Automatically encode categorical features if provided
-        site_location_encoded = None
-        department_encoded = None
+        # Validate input
+        required_fields = ["site_location", "department"]
+        for field in required_fields:
+            if field not in input_data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
 
-        if 'site_location' in input_data:
-            try:
-                site_location_encoded = site_location_encoder.transform([input_data["site_location"]])[0]
-                input_data["site_location_encoded"] = site_location_encoded
-            except Exception as e:
-                return jsonify({"error": f"Error encoding 'site_location': {str(e)}"}), 400
+        # Transform categorical data
+        site_location_encoded = site_location_encoder.transform([input_data["site_location"]])[0]
+        department_encoded = department_encoder.transform([input_data["department"]])[0]
 
-        if 'department' in input_data:
-            try:
-                department_encoded = department_encoder.transform([input_data["department"]])[0]
-                input_data["department_encoded"] = department_encoded
-            except Exception as e:
-                return jsonify({"error": f"Error encoding 'department': {str(e)}"}), 400
-
-        # Validate and fill missing features
-        input_data = handle_missing_data(input_data)
-
-        # Prepare the data for prediction
+        # Prepare input data
         new_data = {
-            "task_priority": input_data["task_priority"],
-            "task_complexity": input_data["task_complexity"],
-            "resources_allocated": input_data["resources_allocated"],
-            "communication_frequency": input_data["communication_frequency"],
-            "resource_utilization": input_data["resource_utilization"],
-            "complexity_to_priority_ratio": input_data["complexity_to_priority_ratio"],
-            "adjusted_frequency": input_data["adjusted_frequency"],
-            "delay_factor": input_data.get("delay_factor", 0),  # Default to 0 if missing
-            "site_location_encoded": input_data["site_location_encoded"],
-            "department_encoded": input_data["department_encoded"],
+            "task_priority": input_data.get("task_priority", 0),
+            "task_complexity": input_data.get("task_complexity", 0),
+            "resources_allocated": input_data.get("resources_allocated", 0),
+            "communication_frequency": input_data.get("communication_frequency", 0),
+            "resource_utilization": input_data.get("resource_utilization", 0),
+            "complexity_to_priority_ratio": input_data.get("complexity_to_priority_ratio", 0),
+            "adjusted_frequency": input_data.get("adjusted_frequency", 0),
+            "delay_factor": input_data.get("delay_factor", 0),
+            "site_location_encoded": site_location_encoded,
+            "department_encoded": department_encoded
         }
-
-        # Convert to DataFrame
         input_df = pd.DataFrame([new_data])
 
-        # Log DataFrame columns for debugging
-        print("Input DataFrame columns:", input_df.columns)
+        # Scale data and predict
+        input_df_scaled = scaler_conflict.transform(input_df[features])
+        prediction = conflict_model.predict(input_df_scaled)[0]
+        prediction_prob = conflict_model.predict_proba(input_df_scaled)[0]
 
-        # Ensure the feature columns are in the correct order for scaling
-        missing_features = [feature for feature in features if feature not in input_df.columns]
-        if missing_features:
-            return jsonify({"error": f"Missing required features: {missing_features}"}), 400
-
-        # Scale the input data
-        input_df_scaled = scaler.transform(input_df[features])
-
-        # Predict
-        prediction = model.predict(input_df_scaled)[0]
-        prediction_prob = model.predict_proba(input_df_scaled)[0]
-
-        # Prepare the response
+        # Prepare response
         response = {
             "predicted_class": "Conflict" if prediction == 1 else "No Conflict",
             "probabilities": {
-                "No Conflict": float(prediction_prob[0]),  # Convert to Python float
-                "Conflict": float(prediction_prob[1]),    # Convert to Python float
-            },
+                "No Conflict": round(prediction_prob[0], 2),
+                "Conflict": round(prediction_prob[1], 2)
+            }
         }
-
         return jsonify(response)
 
     except Exception as e:
-        return jsonify({"error": str(e), "details": str(e)}), 500
+        logger.exception(f"Error occurred during prediction: {e}")
+        return jsonify({"error": str(e)}), 500
+
 # <----------------------Department Conflict Prediction------------------>
 
 # Load models and encoders for department conflict prediction
@@ -224,8 +174,8 @@ except Exception as e:
     logger.error(f"Error loading models or encoders: {str(e)}")
     raise
 
-@app.route('/predict_department', methods=['POST'])
-def predict_conflict():
+@app.route('/predict_department_conflict', methods=['POST'])
+def predict_conflict_department():
     try:
         input_data = request.get_json()
         logger.debug(f"Received input: {input_data}")
@@ -340,115 +290,6 @@ def predict_anomaly():
     except Exception as e:
         logger.error(f"Error occurred in anomaly detection: {str(e)}")
         return jsonify({"error": str(e)}), 500
-    
-   
-    # <----------cost_reduction---------->
-    
-clf_model = joblib.load("ml/models/under_budget_classifier.pkl")
-reg_model = joblib.load("ml/models/cost_reduction_regressor.pkl")
-scaler = joblib.load("ml/models/cost_scaler.pkl")
-site_location_encoder = joblib.load("ml/models/site_location_encoder.pkl")
-department_encoder = joblib.load("ml/models/department_encoder.pkl")
-
-# Feature list
-features = [
-    "task_priority", "task_complexity", "resources_allocated", "communication_frequency",
-    "resource_efficiency", "complexity_efficiency_ratio", "interaction_effect", "historical_impact",
-    "adjusted_frequency", "completion_deviation", "cost_reduction_potential",
-    "resource_overallocation", "time_overrun_ratio", "communication_inefficiency",
-    "department_location_encoded"
-]
-
-# Function to handle missing data
-def handle_missing_data(input_data, training_data):
-    # Fill missing data with default values or based on the training data distribution
-    feature_stats = {
-        "task_priority": training_data["task_priority"].mean(),
-        "task_complexity": training_data["task_complexity"].mean(),
-        "resources_allocated": training_data["resources_allocated"].mean(),
-        "communication_frequency": training_data["communication_frequency"].mean(),
-        "resource_utilization": training_data["resource_utilization"].mean(),
-        "complexity_to_priority_ratio": training_data["complexity_to_priority_ratio"].mean(),
-        "adjusted_frequency": training_data["adjusted_frequency"].mean(),
-        "delay_factor": training_data["delay_factor"].mean(),
-        "site_location": training_data["site_location"].mode()[0],
-        "department": training_data["department"].mode()[0],
-    }
-    
-    for feature, default_value in feature_stats.items():
-        if feature not in input_data or input_data[feature] is None:
-            if isinstance(default_value, float):  # For numeric features
-                input_data[feature] = np.random.normal(
-                    loc=training_data[feature].mean(),
-                    scale=training_data[feature].std()
-                )
-            else:  # For categorical features
-                input_data[feature] = default_value
-    return input_data
-
-# Prediction function
-def predict_project_outcomes(new_data):
-    # Create DataFrame for new data
-    new_df = pd.DataFrame([new_data])
-
-    # Derived features
-    new_df["resource_efficiency"] = new_df["resources_allocated"] / (new_df["available_resources"] + 1e-6)
-    new_df["complexity_efficiency_ratio"] = new_df["task_complexity"] / (new_df["task_priority"] + 1)
-    new_df["interaction_effect"] = new_df["resources_allocated"] * new_df["communication_frequency"]
-    new_df["historical_impact"] = new_df["historical_delay"] * new_df["task_priority"]
-    new_df["adjusted_frequency"] = np.sqrt(new_df["communication_frequency"])
-    new_df["completion_deviation"] = new_df["actual_completion_time"] - new_df["expected_completion_time"]
-    new_df["cost_reduction_potential"] = (new_df["cost_estimate"] - new_df["actual_cost"]) / new_df["cost_estimate"]
-    new_df["resource_overallocation"] = new_df["resources_allocated"] / (new_df["task_complexity"] + 1e-6)
-    new_df["time_overrun_ratio"] = new_df["actual_completion_time"] / (new_df["expected_completion_time"] + 1e-6)
-    new_df["communication_inefficiency"] = (
-        new_df["communication_frequency"] / (new_df["task_priority"] + 1e-6)
-    )
-    new_df["department_location_interaction"] = (
-        new_df["department"].astype(str) + "_" + new_df["site_location"].astype(str)
-    )
-    new_df["department_location_encoded"] = pd.factorize(new_df["department_location_interaction"])[0]
-
-    # Ensure the DataFrame has required features
-    X_new = new_df[features]
-
-    # Scale features
-    X_new_scaled = scaler.transform(X_new)
-
-    # Make predictions
-    under_budget_prediction = clf_model.predict(X_new_scaled)
-    cost_optimization_prediction = reg_model.predict(X_new_scaled)
-
-    # Convert cost optimization potential to percentage and ensure it's a Python float
-    cost_optimization_percentage = float(cost_optimization_prediction[0]) * 100
-
-    # Return results
-    return {
-        "is_under_budget": bool(under_budget_prediction[0]),
-        "cost_optimization_potential_percentage": cost_optimization_percentage
-    }
-
-@app.route('/predict_cost_reduction', methods=['POST'])
-def predict_cost():
-    try:
-        # Parse input data from the request
-        input_data = request.get_json()
-
-        # Load training data for handling missing values (if necessary)
-        training_data = pd.read_json("data/enhanced_data.json")
-
-        # Handle missing data (optional step based on your model requirements)
-        input_data = handle_missing_data(input_data, training_data)
-
-        # Predict project outcomes
-        predictions = predict_project_outcomes(input_data)
-
-        return jsonify(predictions)
-
-    except Exception as e:
-        return jsonify({"error": str(e), "details": str(e)}), 500
-
-
 # Start the Flask app
 if __name__ == "__main__":
     app.run(host=host, port=port, debug=True)
