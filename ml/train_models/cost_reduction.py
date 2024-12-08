@@ -158,9 +158,7 @@ def predict_project_outcomes(new_data):
         "is_under_budget": bool(under_budget_prediction[0]),
         "cost_optimization_potential": float(cost_optimization_prediction[0])
     }
-
-# Example usage
-if _name_ == "_main_":
+if __name__ == "_main_":
     new_project_data = {
         "task_priority": 2,
         "task_complexity": 5,
@@ -172,8 +170,8 @@ if _name_ == "_main_":
         "expected_completion_time": 15,
         "cost_estimate": 5000,
         "actual_cost": 5500,
-        "department": "IT",
-        "site_location": "Mumbai"
+        "department": "Water Supply",
+        "site_location": "Location-1"
     }
 
     predictions = predict_project_outcomes(new_project_data)
