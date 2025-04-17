@@ -43,7 +43,7 @@ This repository contains all ML-related models and scripts that support the Sang
 
 ## 🖼️ Demo
 
-🔗 **Live Deployment Link**: [Click here](https://spacecon-ten.vercel.app/) <!-- Replace with actual URL -->
+🔗 **Live Deployment Link**: [Click here](https://sangam-frontend-two.vercel.app/) <!-- Replace with actual URL -->
 
 ---
 
